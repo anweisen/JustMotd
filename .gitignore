@@ -1,7 +1,11 @@
 
-Cargo.lock
+# application generated files
+config.json
 
+# build files
+Cargo.lock
 /target
 
+# ide files
 /*.iml
 /.idea
