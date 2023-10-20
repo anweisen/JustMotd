@@ -40,17 +40,11 @@ async fn handle_client(mut stream: TcpStream) {
 
   let mut bytes = vec![0u8; length as usize];
   stream.read_exact(&mut bytes).await.expect("TODO: panic message");
-  // for x in &bytes {
-  //   println!("{:?}  {:b}  {:#x}", x, x, x);
-  // }
 
-  let mut buffer = BytesMut::with_capacity(length as usize);
-  buffer.extend_from_slice(&*bytes);
+  // let mut buffer = BytesMut::with_capacity(length as usize);
+  // buffer.extend_from_slice(&*bytes);
 
-  read_handshake(&mut buffer).expect("TODO: panic message");
-
-
-
+  read_handshake(&mut bytes).expect("TODO: panic message");
 
   let json = r#"
     {
@@ -79,22 +73,44 @@ async fn handle_client(mut stream: TcpStream) {
   // let mut res = BytesMut::with_capacity(128);
   let mut res = Vec::new();
   VarInt::encode(0x00, &mut res).expect("TODO: panic message");
-  VarString::encode(json, &mut res).expect("");
+  VarString::encode(json, &mut res).expect("TODO: panic message");
 
   let mut packet = Vec::new();
   VarInt::encode(res.len() as i32, &mut packet).expect("TODO: panic message");
   packet.write_all(&*res).await.expect("TODO: panic message");
 
-  stream.write_all(&*packet).await.expect("");
-  stream.flush().await.expect("");
+  stream.write_all(&*packet).await.expect("TODO: panic message");
+  stream.flush().await.expect("TODO: panic message");
   println!("msg sent");
 }
 
-fn read_handshake(mut bytes: &[u8]) -> Result<(), VarIntDecodeError> {
+#[derive(Debug)]
+pub enum PacketHandleError {
+  InvalidVarInt,
+  InvalidVarString,
+  IoError,
+}
+
+impl From<VarStringDecodeError> for PacketHandleError {
+  fn from(value: VarStringDecodeError) -> Self {
+    match value {
+      VarStringDecodeError::InvalidVarInt => PacketHandleError::InvalidVarInt,
+      VarStringDecodeError::UtfError => PacketHandleError::InvalidVarString,
+    }
+  }
+}
+
+impl From<VarIntDecodeError> for PacketHandleError {
+  fn from(_value: VarIntDecodeError) -> Self {
+    PacketHandleError::InvalidVarInt
+  }
+}
+
+fn read_handshake(mut bytes: &[u8]) -> Result<(), PacketHandleError> {
   // https://wiki.vg/Protocol#Handshake
   let packet_id = VarInt::decode(&mut bytes)?;
   let protocol_version = VarInt::decode(&mut bytes)?;
-  let hostname = VarString::decode(&mut bytes);
+  let hostname = VarString::decode(&mut bytes)?;
   let port = bytes.get_u16(); // u16: short
   let next_state = VarInt::decode(&mut bytes)?;
 

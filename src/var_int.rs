@@ -51,7 +51,7 @@ impl VarInt {
     Err(VarIntDecodeError::TooLarge)
   }
 
-  pub fn encode(mut value: i32, mut writer: &mut impl Write) -> Result<(), io::Error> {
+  pub fn encode(mut value: i32, writer: &mut impl Write) -> Result<(), io::Error> {
     loop {
       // write 7 bits at a time, msf is continuation bit
       let mut byte = (value & 0x7F) as u8;
@@ -73,14 +73,20 @@ impl VarInt {
   }
 }
 
+#[derive(Debug)]
+pub enum VarStringDecodeError {
+  InvalidVarInt,
+  UtfError,
+}
+
 pub struct VarString(pub str);
 
 impl VarString {
-  pub fn decode(mut buffer: &mut &[u8]) -> String {
-    let length = VarInt::decode(&mut *buffer).expect("");
+  pub fn decode(buffer: &mut &[u8]) -> Result<String, VarStringDecodeError> {
+    let length = VarInt::decode(&mut *buffer).map_err(|err| VarStringDecodeError::InvalidVarInt)?;
     let bytes = &buffer[..length as usize];
     buffer.advance(length as usize);
-    str::from_utf8(bytes).unwrap().to_string()
+    Ok(str::from_utf8(bytes).map_err(|_| VarStringDecodeError::UtfError)?.to_string())
   }
 
   pub fn encode(value: String, mut writer: &mut impl Write) -> Result<(), io::Error> {
