@@ -19,7 +19,9 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
   };
 
   // TODO feat(legacy ping): https://wiki.vg/Server_List_Ping#1.6
-  if length == 0xFE {
+  if length == 0xFE { // could also be packet with length 254=0xFE (unlikely, but possible)
+    trace!("Encountered legacy ping!");
+    drop(stream);
     return;
   }
 
