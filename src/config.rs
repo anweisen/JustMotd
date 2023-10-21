@@ -1,6 +1,7 @@
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use log::warn;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -63,7 +64,7 @@ impl Config {
     let config: Self = serde_json::from_str(&*raw).map_err(|err| ConfigError::Parse(err))?;
 
     for field in &config.unknown_fields {
-      println!("Unknown configuration '{}' with value {:?}", field.0, field.1);
+      warn!("Unknown configuration '{}' with value {:?}", field.0, field.1);
     }
 
     Ok(config)

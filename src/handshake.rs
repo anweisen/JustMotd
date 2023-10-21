@@ -42,7 +42,7 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
     Ok(data) => data,
     Err(err) => {
       drop(stream);
-      println!("Unable to decode handshake: {:?}", err);
+      error!("Unable to decode handshake: {:?}", err);
       return;
     }
   };
