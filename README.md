@@ -4,12 +4,6 @@ A configurable socket server written in rust responding to packets via the minec
 
 ## Setup
 
-### Docker Run
-
-```shell
-docker run -d -p 25565:25565 -v /your/path/to/conf:/app/conf -e CONFIG=conf/config.json --name just_motd anweisen/just_motd:latest
-```
-
 ### Docker Compose
 
 ```yaml
@@ -26,6 +20,7 @@ services:
       - CONFIG=conf/config.json
 ```
 
+
 #### Start
 
 ```shell
@@ -36,6 +31,18 @@ docker compose up
 
 ```shell
 docker compose down
+```
+
+### Docker Run
+
+```shell
+docker run -d -p 25565:25565 --name just_motd anweisen/just_motd:latest
+```
+
+#### With config
+
+```shell
+docker run -d -p 25565:25565 -v /your/path/to/conf:/app/conf -e CONFIG=conf/config.json --name just_motd anweisen/just_motd:latest
 ```
 
 ## Configuration
