@@ -1,27 +1,80 @@
 use std::error::Error;
 use std::fmt::Write;
+use std::fs::File;
 use std::io::Read;
 
-use bytes::{Buf, BufMut, BytesMut};
+use base64::prelude::Engine as _;
+use bytes::{Buf, BufMut};
+use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use crate::var_int::{VarInt, VarIntDecodeError, VarString};
+use crate::config::{Config, ConfigError, ServerStatus};
+use crate::var_int::{VarInt, VarIntDecodeError, VarString, VarStringDecodeError};
 
 mod var_int;
+mod packet;
+mod config;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-  let listener = TcpListener::bind("127.0.0.1:25565").await?;
+  let config_path = "config.json"; // TODO feat(config): read runtime args for config path
+  let config = load_config(config_path);
+  println!("{:?}", config);
+
+  let favicon = decode_favicon(&config);
+
+  let server_status = ServerStatus::generate_json(favicon.clone(), &config, false);
+  let server_status_component = if config.motd.component == Value::Null { server_status.clone() } else { ServerStatus::generate_json(favicon.clone(), &config, true) };
+  println!("{:?}", server_status);
+  drop(favicon);
+
+  let listener = TcpListener::bind(&config.bind).await?;
   println!("Listening on tcp: {}", listener.local_addr().unwrap());
 
   loop {
-    let (stream, addr) = listener.accept().await?;
-    tokio::spawn(handle_client(stream)); // TODO feat(thread pool): limit & reuse
+    let (stream, _) = listener.accept().await?;
+    tokio::spawn(handle_client(stream, server_status.clone())); // TODO feat(thread pool): limit & reuse
   }
 }
 
-async fn handle_client(mut stream: TcpStream) {
+fn load_config(config_path: &str) -> Config {
+  match Config::load(config_path) {
+    Ok(config) => config,
+    Err(err) => match err {
+      ConfigError::Io(_) => {
+        // could not read config file: might not exist -> generate default config
+        // TODO log
+        let default_config = Config::default();
+        default_config.save(config_path).expect("could not save default config");
+        default_config
+      }
+      ConfigError::Parse(_err) => panic!("malformed config, might have changed, delete to regenerate")
+    }
+  }
+}
+
+fn decode_favicon(config: &Config) -> Option<String> {
+  match &config.favicon {
+    Some(favicon) => match File::open(favicon) {
+      Ok(mut file) => {
+        // TODO also check dimensions
+        let mut content = Vec::new();
+        file.read_to_end(&mut content).expect("error while reading favicon");
+        println!("{}", base64::engine::general_purpose::STANDARD_NO_PAD.encode(&mut content));
+        Some(base64::engine::general_purpose::STANDARD_NO_PAD.encode(&mut content))
+      }
+      Err(err) => {
+        // TODO log there is no favicon
+        println!("Could not find specified icon at {:?}", err.to_string());
+        None
+      }
+    }
+    None => None,
+  }
+}
+
+async fn handle_client(mut stream: TcpStream, server_status: String) {
   let length = match VarInt::decode_partial(&mut stream).await {
     Ok(length) => length,
     Err(VarIntDecodeError::Incomplete) => return,
@@ -44,44 +97,29 @@ async fn handle_client(mut stream: TcpStream) {
   // let mut buffer = BytesMut::with_capacity(length as usize);
   // buffer.extend_from_slice(&*bytes);
 
-  read_handshake(&mut bytes).expect("TODO: panic message");
+  let x = read_handshake(&mut bytes).expect("TODO: panic message");
 
-  let json = r#"
-    {
-      "version": {
-        "name": "test version",
-        "protocol": 762
-      },
-      "players": {
-        "max": 100,
-        "online": 5,
-        "sample": [
-          {
-            "name": "anweisen",
-            "id": "4566e69f-c907-48ee-8d71-d7ba5aa00d20"
-          }
-        ]
-      },
-      "description": {
-        "text": "Hello World!"
-      },
-      "enforcesSecureChat": true,
-      "previewsChat": true
-    }
-  "#.replace(" ", "").replace("\n", "");
-
-  // let mut res = BytesMut::with_capacity(128);
   let mut res = Vec::new();
   VarInt::encode(0x00, &mut res).expect("TODO: panic message");
-  VarString::encode(json, &mut res).expect("TODO: panic message");
+  VarString::encode(server_status, &mut res).expect("TODO: panic message");
 
   let mut packet = Vec::new();
   VarInt::encode(res.len() as i32, &mut packet).expect("TODO: panic message");
   packet.write_all(&*res).await.expect("TODO: panic message");
 
+  println!("{:?}", packet);
+  let mut copy = &packet[..];
+  println!("length {:?}", VarInt::decode(&mut copy));
+  println!("packet id {:?}", VarInt::decode(&mut copy));
+  // println!("text {:?}", VarString::decode(&mut copy));
+
   stream.write_all(&*packet).await.expect("TODO: panic message");
   stream.flush().await.expect("TODO: panic message");
   println!("msg sent");
+
+  // dropping the stream resource will close the connection
+  drop(stream);
+  println!("Closed Connection");
 }
 
 #[derive(Debug)]
@@ -106,7 +144,7 @@ impl From<VarIntDecodeError> for PacketHandleError {
   }
 }
 
-fn read_handshake(mut bytes: &[u8]) -> Result<(), PacketHandleError> {
+fn read_handshake(mut bytes: &[u8]) -> Result<i32, PacketHandleError> {
   // https://wiki.vg/Protocol#Handshake
   let packet_id = VarInt::decode(&mut bytes)?;
   let protocol_version = VarInt::decode(&mut bytes)?;
@@ -123,5 +161,5 @@ fn read_handshake(mut bytes: &[u8]) -> Result<(), PacketHandleError> {
   // TODO refactor(state enum)
   if next_state == 1 {}
 
-  Ok(())
+  Ok(protocol_version)
 }
