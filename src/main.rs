@@ -1,3 +1,4 @@
+use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
@@ -18,11 +19,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
   env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
       .init();
 
-  // TODO feat(config): read runtime args for config path
-  let config_path = "config.json";
+  let config_path = env::var("CONFIG").unwrap_or("config.json".to_string());
   debug!("Loading config from '{}'", config_path);
-
-  let config = load_config(config_path);
+  let config = load_config(&*config_path);
   debug!("Loaded config {:?}", config);
 
   let favicon = encode_favicon(&config);
