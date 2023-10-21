@@ -5,9 +5,10 @@ use log::{error, trace};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+use crate::ComposedConfigs;
 use crate::var_int::{VarInt, VarIntDecodeError, VarString, VarStringDecodeError};
 
-pub async fn handle_client(mut stream: TcpStream, server_status: String, disconnect: String) {
+pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConfigs) {
   let length = match VarInt::decode_partial(&mut stream).await {
     Ok(length) => length,
     Err(VarIntDecodeError::Incomplete) => return,
@@ -47,11 +48,19 @@ pub async fn handle_client(mut stream: TcpStream, server_status: String, disconn
   trace!("Decoded: packet_id {:#x}, protocol_version {}, hostname {}, port {}, next_state {:?}", handshake_data.0, handshake_data.1, handshake_data.2, handshake_data.3, handshake_data.4);
 
   let packet_data = match handshake_data.4 {
-    HandshakeNextState::Status => server_status,
-    HandshakeNextState::Login => disconnect,
+    HandshakeNextState::Status => match handshake_data.1 {
+      version if supports_custom_colors(version) => composed_configs.motd_component,
+      _ => composed_configs.motd,
+    }
+    HandshakeNextState::Login => match handshake_data.1 {
+      version if supports_custom_colors(version) => composed_configs.disconnect_component,
+      _ => composed_configs.disconnect,
+    }
   };
 
-  // create response packet
+  // create response packet, both disconnect during login (client-bound) & status response share the same packet id 0x00
+  // https://wiki.vg/Protocol#Status_Response
+  // https://wiki.vg/Protocol#Disconnect_.28login.29
   let packet = match create_packet(0x00, packet_data) {
     Ok(packet) => packet,
     Err(err) => {
@@ -69,6 +78,12 @@ pub async fn handle_client(mut stream: TcpStream, server_status: String, disconn
   // dropping the stream resource will close the connection
   drop(stream);
   trace!("Dropped connection");
+}
+
+fn supports_custom_colors(protocol_version: i32) -> bool {
+  // protocol version for snapshots after 1.16.4-pre1 are prefixed with 0x40000000, we dont care here
+  // 735 -> 1.16: https://wiki.vg/Protocol_version_numbers
+  protocol_version >= 735
 }
 
 fn create_packet(packet_id: i32, content: String) -> Result<Vec<u8>, PacketHandleError> {

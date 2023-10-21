@@ -28,12 +28,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
   debug!("Base64 encoded favicon {:?}", favicon);
 
   // pre compose json responses for less cpu usage
-  let server_status = ServerStatus::generate_json(favicon.clone(), &config, false);
-  let server_status_component = if config.motd.component == Value::Null { server_status.clone() } else { ServerStatus::generate_json(favicon.clone(), &config, true) };
-  drop(favicon);
-  let disconnect = DisconnectMessage::generate_json(&config);
+  let composed_configs = ComposedConfigs::new(favicon, &config);
   debug!("Pre composed json responses successfully");
-
 
   let listener = TcpListener::bind(&config.bind).await?;
   info!("Tcp server listening on: {}", listener.local_addr().unwrap());
@@ -43,7 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     debug!("-> Peer connected - {}", address);
 
     // TODO feat(thread pool): limit & reuse
-    tokio::spawn(handshake::handle_client(stream, server_status_component.clone(), disconnect.clone()));
+    tokio::spawn(handshake::handle_client(stream, composed_configs.clone()));
   }
 }
 
@@ -78,5 +74,33 @@ fn encode_favicon(config: &Config) -> Option<String> {
       }
     }
     None => None,
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct ComposedConfigs {
+  motd: String,
+  motd_component: String,
+  disconnect: String,
+  disconnect_component: String,
+}
+
+impl ComposedConfigs {
+  fn new(favicon: Option<String>, config: &Config) -> Self {
+    let motd = ServerStatus::generate_json(favicon.clone(), &config, false);
+    let motd_component = if config.motd.component == Value::Null {
+      motd.clone()
+    } else {
+      ServerStatus::generate_json(favicon.clone(), &config, true)
+    };
+
+    let disconnect = DisconnectMessage::generate_json(&config, false);
+    let disconnect_component = if config.disconnect.component == Value::Null {
+      disconnect.clone()
+    } else {
+      DisconnectMessage::generate_json(&config, true)
+    };
+
+    Self { motd, motd_component, disconnect, disconnect_component }
   }
 }

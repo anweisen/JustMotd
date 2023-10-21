@@ -117,7 +117,7 @@ struct ServerStatusSamplePlayer {
 static UUID: &str = "147e3454-1727-4807-9ba5-fe35b25ddbc1";
 
 impl ServerStatus {
-  pub fn generate_json(favicon_base64: Option<String>, config: &Config, motd_component: bool) -> String {
+  pub fn generate_json(favicon_base64: Option<String>, config: &Config, use_motd_component: bool) -> String {
     match serde_json::to_string(&ServerStatus {
       favicon: favicon_base64.map(|str| "data:image/png;base64,".to_string() + &*str),
       enforces_secure_chat: false,
@@ -131,7 +131,7 @@ impl ServerStatus {
         online: config.version.hover.len() as i32,
         sample: config.version.hover.iter().map(|name| ServerStatusSamplePlayer { name: name.to_string(), id: UUID.to_string() }).collect(),
       },
-      description: if motd_component { config.motd.component.clone() } else { json!({"text": &config.motd.text}) },
+      description: if use_motd_component { config.motd.component.clone() } else { json!({"text": &config.motd.text}) },
     }) {
       Ok(json) => json,
       Err(_) => panic!("error while converting generated motd json to string")
@@ -142,7 +142,7 @@ impl ServerStatus {
 pub struct DisconnectMessage;
 
 impl DisconnectMessage {
-  pub fn generate_json(config: &Config) -> String {
-    json!({"text": config.disconnect.text}).to_string()
+  pub fn generate_json(config: &Config, use_disconnect_component: bool) -> String {
+    if use_disconnect_component { config.disconnect.component.to_string() } else { json!({"text": config.disconnect.text}).to_string() }
   }
 }
