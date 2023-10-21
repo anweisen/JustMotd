@@ -108,6 +108,8 @@ struct ServerStatusSamplePlayer {
   id: String, // uuid
 }
 
+static UUID: &str = "147e3454-1727-4807-9ba5-fe35b25ddbc1";
+
 impl ServerStatus {
   pub fn generate_json(favicon_base64: Option<String>, config: &Config, motd_component: bool) -> String {
     match serde_json::to_string(&ServerStatus {
@@ -119,9 +121,9 @@ impl ServerStatus {
         protocol: -1,
       },
       players: ServerStatusPlayers {
-        max: 0,
-        online: 0,
-        sample: vec![],
+        max: config.version.hover.len() as i32,
+        online: config.version.hover.len() as i32,
+        sample: config.version.hover.iter().map(|name| ServerStatusSamplePlayer { name: name.to_string(), id: UUID.to_string() }).collect(),
       },
       description: if motd_component { config.motd.component.clone() } else { json!({"text": &config.motd.text}) },
     }) {
