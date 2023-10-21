@@ -75,18 +75,18 @@ impl VarInt {
 
 #[derive(Debug)]
 pub enum VarStringDecodeError {
-  InvalidVarInt,
-  UtfError,
+  InvalidVarInt(VarIntDecodeError),
+  UtfError(str::Utf8Error),
 }
 
 pub struct VarString(pub str);
 
 impl VarString {
   pub fn decode(buffer: &mut &[u8]) -> Result<String, VarStringDecodeError> {
-    let length = VarInt::decode(&mut *buffer).map_err(|err| VarStringDecodeError::InvalidVarInt)?;
+    let length = VarInt::decode(&mut *buffer).map_err(|err| VarStringDecodeError::InvalidVarInt(err))?;
     let bytes = &buffer[..length as usize];
     buffer.advance(length as usize);
-    Ok(str::from_utf8(bytes).map_err(|_| VarStringDecodeError::UtfError)?.to_string())
+    Ok(str::from_utf8(bytes).map_err(|err| VarStringDecodeError::UtfError(err))?.to_string())
   }
 
   pub fn encode(value: String, mut writer: &mut impl Write) -> Result<(), io::Error> {

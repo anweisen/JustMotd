@@ -30,12 +30,15 @@ pub struct VersionConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct DisconnectConfig {}
+pub struct DisconnectConfig {
+  pub text: String,
+  pub component: Value,
+}
 
 impl Default for Config {
   fn default() -> Self {
     Self {
-      bind: "127.0.0.1:25565".to_string(),
+      bind: "0.0.0.0:25565".to_string(),
       favicon: Some("icon.png".to_string()),
       motd: MotdConfig {
         text: "§4Can't connect to server\n§8› §7github.com/anweisen/JustMotd".to_string(),
@@ -43,9 +46,12 @@ impl Default for Config {
       },
       version: VersionConfig {
         text: "§4§l✗ §cOffline ".to_string(),
-        hover: vec![],
+        hover: vec!["  §c✞ R.I.P. §8× §7anweisen.net  ".to_string()],
       },
-      disconnect: DisconnectConfig {},
+      disconnect: DisconnectConfig {
+        text: "".to_string(),
+        component: Value::Null,
+      },
       unknown_fields: Default::default(),
     }
   }
@@ -128,15 +134,15 @@ impl ServerStatus {
       description: if motd_component { config.motd.component.clone() } else { json!({"text": &config.motd.text}) },
     }) {
       Ok(json) => json,
-      Err(_) => panic!("error while converting generated json to string")
+      Err(_) => panic!("error while converting generated motd json to string")
     }
   }
 }
 
-// struct DisconnectChat(Value);
-//
-// impl DisconnectChat {
-//   pub fn generate_json(config: &Config) {
-//     serde_json::to_string(config.disconnect)
-//   }
-// }
+pub struct DisconnectMessage;
+
+impl DisconnectMessage {
+  pub fn generate_json(config: &Config) -> String {
+    json!({"text": config.disconnect.text}).to_string()
+  }
+}
