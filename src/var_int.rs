@@ -19,11 +19,12 @@ impl VarInt {
     for i in 0..5 {
       match reader.read_u8().await {
         Ok(byte) => {
-          // bitwise and: 01111111 -> deletes the first bit, keeps the rest
+          // bitwise and: 0x7F = 0111 1111 -> deletes the first bit, keeps the rest
           // first bit will be used in order to determine whether to continue
-          decoded_value |= (byte as i32 & 0b01111111) << (i * 7);
+          decoded_value |= (byte as i32 & 0x7F) << (i * 7);
 
-          if byte & 0b10000000 == 0 {
+          // first bit mask: 0x80 = 1000 0000
+          if byte & 0x80 == 0 {
             return Ok(decoded_value);
           }
         }
@@ -37,6 +38,10 @@ impl VarInt {
     let mut decoded_value: i32 = 0;
 
     for i in 0..5 {
+      if buffer.remaining() == 0 {
+        return Err(VarIntDecodeError::Incomplete);
+      }
+
       let byte = buffer.get_u8();
 
       // bitwise and: 0x7F = 0111 1111 -> deletes the first bit, keeps the rest
