@@ -88,10 +88,9 @@ pub struct ComposedConfigs {
 impl ComposedConfigs {
   fn new(favicon: Option<String>, config: &Config) -> Self {
     let motd = ServerStatus::generate_json(favicon.clone(), &config, false);
-    let motd_component = if config.motd.component == Value::Null {
-      motd.clone()
-    } else {
-      ServerStatus::generate_json(favicon.clone(), &config, true)
+    let motd_component = match config.motd.component {
+      Value::Null => motd.clone(),
+      _ => ServerStatus::generate_json(favicon.clone(), &config, true),
     };
 
     let disconnect = DisconnectMessage::generate_json(&config, false);
