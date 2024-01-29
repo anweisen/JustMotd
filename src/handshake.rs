@@ -102,7 +102,6 @@ async fn handle_legacy(n: usize, peek_bytes: &[u8], composed_configs: &ComposedC
   // 1.6            -> FE 01 FA ..  |
   // 1.4 - 1.5      -> FE 01        | handled the same
   // Beta1.8 - 1.3  -> FE
-
   let post_1_3 = n > 1 && peek_bytes[1] == 0x01;
 
   let characters = match post_1_3 {
@@ -122,7 +121,6 @@ async fn handle_legacy(n: usize, peek_bytes: &[u8], composed_configs: &ComposedC
   };
 
   let utf16_bytes: Vec<u16> = characters.encode_utf16().collect();
-  println!("UTF-16BE bytes: {:?}", utf16_bytes.iter().map(|b| format!("{:04x}", b)).collect::<Vec<_>>());
 
   let mut response_packet = Vec::new();
   // kick packet -> 0xFF
@@ -132,7 +130,6 @@ async fn handle_legacy(n: usize, peek_bytes: &[u8], composed_configs: &ComposedC
   for utf16_byte in utf16_bytes {
     response_packet.write_u16(utf16_byte).await.expect("Could not write u16 to buffer");
   }
-  println!("{:?}", response_packet.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>());
 
   send_flush_close(&*response_packet, &mut stream).await.expect("TODO: panic message");
 }
