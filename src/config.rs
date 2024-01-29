@@ -43,13 +43,13 @@ impl Default for Config {
       bind: "0.0.0.0:25565".to_string(),
       favicon: Some("icon.png".to_string()),
       motd: MotdConfig {
-        text: "§4Can't connect to server\n§8› §7github.com/anweisen/JustMotd".to_string(),
-        legacy: "§cpowered by §oJustMotd".to_string(),
+        text: "§cServer is currently unreachable\n§8› §7§ogithub.com/anweisen/§lJustMotd".to_string(),
+        legacy: "§cpowered by JustMotd".to_string(),
         component: Value::Null,
       },
       version: VersionConfig {
         text: "§4§l✗ §cOffline ".to_string(),
-        hover: vec!["  §c✞ R.I.P. §8× §7anweisen.net  ".to_string()],
+        hover: vec![" ".to_string(), "  §8× §canweisen.net §8×  ".to_string(), "  ".to_string()],
       },
       disconnect: DisconnectConfig {
         text: "§cThis server is currently undergoing maintenance".to_string(),
