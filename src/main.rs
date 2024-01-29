@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Read;
 
 use base64::prelude::Engine as _;
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use serde_json::Value;
 use tokio::net::TcpListener;
 
@@ -25,11 +25,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
   debug!("Loaded config {:?}", config);
 
   let favicon = encode_favicon(&config);
-  debug!("Base64 encoded favicon {:?}", favicon);
+  trace!("Base64 encoded favicon {:?}", favicon);
 
-  // pre compose json responses for less cpu usage
+  // pre compose json responses for less cpu usage (no repetitive encoding)
   let composed_configs = ComposedConfigs::new(favicon, &config);
   debug!("Pre composed json responses successfully");
+  trace!("Created composed_configs {:?}", composed_configs);
 
   let listener = TcpListener::bind(&config.bind).await?;
   info!("Tcp server listening on: {}", listener.local_addr().unwrap());
@@ -78,6 +79,7 @@ fn encode_favicon(config: &Config) -> Option<String> {
 pub struct ComposedConfigs {
   status: String,
   status_component: String,
+  status_legacy: (String, String, String), // motd, version_text, colorless motd (pre 1.4)
   disconnect: String,
   disconnect_component: String,
 }
@@ -89,6 +91,7 @@ impl ComposedConfigs {
       Value::Null => status.clone(),
       _ => ServerStatus::generate_json(favicon.clone(), &config, true),
     };
+    let status_legacy = (config.motd.legacy.clone(), config.version.text.clone(), ComposedConfigs::strip_color_codes(&config.motd.legacy));
 
     let disconnect = DisconnectMessage::generate_json(&config, false);
     let disconnect_component = match config.disconnect.component {
@@ -96,6 +99,21 @@ impl ComposedConfigs {
       _ => DisconnectMessage::generate_json(&config, true),
     };
 
-    Self { status, status_component, disconnect, disconnect_component }
+    Self { status, status_component, status_legacy, disconnect, disconnect_component }
+  }
+
+  fn strip_color_codes(text: &String) -> String {
+    let mut result = String::new();
+    let mut skip = false;
+
+    for c in text.chars() {
+      if skip || c == '§' {
+        skip = !skip;
+        continue;
+      }
+      result.push(c);
+    }
+
+    result
   }
 }

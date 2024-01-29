@@ -21,6 +21,7 @@ pub struct Config {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MotdConfig {
   pub text: String,
+  pub legacy: String,
   pub component: Value,
 }
 
@@ -43,6 +44,7 @@ impl Default for Config {
       favicon: Some("icon.png".to_string()),
       motd: MotdConfig {
         text: "§4Can't connect to server\n§8› §7github.com/anweisen/JustMotd".to_string(),
+        legacy: "§cpowered by §oJustMotd".to_string(),
         component: Value::Null,
       },
       version: VersionConfig {
@@ -50,7 +52,7 @@ impl Default for Config {
         hover: vec!["  §c✞ R.I.P. §8× §7anweisen.net  ".to_string()],
       },
       disconnect: DisconnectConfig {
-        text: "".to_string(),
+        text: "§cThis server is currently undergoing maintenance".to_string(),
         component: Value::Null,
       },
       unknown_fields: Default::default(),
@@ -128,6 +130,7 @@ impl ServerStatus {
         protocol: -1,
       },
       players: ServerStatusPlayers {
+        // (max) player count must match sample size for some reason to be displayed
         max: config.version.hover.len() as i32,
         online: config.version.hover.len() as i32,
         sample: config.version.hover.iter().map(|name| ServerStatusSamplePlayer { name: name.to_string(), id: UUID.to_string() }).collect(),

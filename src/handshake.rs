@@ -9,23 +9,35 @@ use crate::ComposedConfigs;
 use crate::var_int::{VarInt, VarIntDecodeError, VarString, VarStringDecodeError};
 
 pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConfigs) {
+  let mut peek_bytes = [0; 3];
+  match stream.peek(&mut peek_bytes).await {
+    Ok(0) => return, // probably not fully received yet
+    Ok(n) => {
+      // could also be packet with length 254=0xFE (unlikely, but possible)
+      // https://wiki.vg/Server_List_Ping#1.6
+      // https://wiki.vg/Server_List_Ping#1.4_to_1.5
+      if peek_bytes[0] == 0xFE {
+        handle_legacy(n, &peek_bytes, &composed_configs, &mut stream).await;
+        drop(stream); // TODO
+        return;
+      }
+    }
+    Err(err) => {
+      error!("Could not peek TcpStream: {}", err);
+      return;
+    }
+  }
+
   let length = match VarInt::decode_partial(&mut stream).await {
     Ok(length) => length,
-    Err(VarIntDecodeError::Incomplete) => return,
+    Err(VarIntDecodeError::Incomplete) => return, // probably not fully received yet // TODO already above?!
     Err(VarIntDecodeError::TooLarge) => {
       error!("Unable to decode VarInt: TooLarge");
       return;
     }
   };
 
-  // TODO feat(legacy ping): https://wiki.vg/Server_List_Ping#1.6
-  if length == 0xFE { // could also be packet with length 254=0xFE (unlikely, but possible)
-    trace!("Encountered legacy ping!");
-    drop(stream);
-    return;
-  }
-
-  trace!("Received packet prefixed with (length) {}", length);
+  trace!("Received packet prefixed with (length) {}/{:#x}", length, length);
 
   let mut bytes = vec![0u8; length as usize];
   match stream.read_exact(&mut bytes).await {
@@ -61,7 +73,8 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
     }
   };
 
-  // create response packet, both disconnect during login (client-bound) & status response share the same packet id 0x00
+  // create response packet
+  // both disconnect during login (client-bound) & status response share the same packet id: 0x00
   // https://wiki.vg/Protocol#Status_Response
   // https://wiki.vg/Protocol#Disconnect_.28login.29
   let packet = match create_packet(0x00, packet_data) {
@@ -73,20 +86,68 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
     }
   };
 
-  // send response packet to stream
-  stream.write_all(&*packet).await.expect("TODO: panic message");
-  stream.flush().await.expect("TODO: panic message");
-  trace!("Response to {:?} sent successfully", handshake_data.4);
+  // send response packet to stream & close stream
+  match send_flush_close(&packet, &mut stream).await {
+    Ok(_) => trace!("Response to {:?} sent successfully", handshake_data.4),
+    Err(err) => error!("Could not send response: {:?}", err)
+  }
 
   // dropping the stream resource will close the connection
   drop(stream);
-  trace!("Dropped connection");
+  trace!("<- Dropped connection");
+}
+
+async fn handle_legacy(n: usize, peek_bytes: &[u8], composed_configs: &ComposedConfigs, mut stream: &mut TcpStream) {
+  trace!("Encountered legacy ping!");
+  // 1.6            -> FE 01 FA ..  |
+  // 1.4 - 1.5      -> FE 01        | handled the same
+  // Beta1.8 - 1.3  -> FE
+
+  let post_1_3 = n > 1 && peek_bytes[1] == 0x01;
+
+  let characters = match post_1_3 {
+    true => {
+      // for 1.4-1.6: separated by 0x0000 -> \u{0000} -> null char
+      // - §1: required prefix - 127: protocol version -> recommended (no real legacy version)
+      // - {0}: version name   - {1}: motd   - online players   - max players
+      let segments: [&str; 6] = ["§1", "127", &composed_configs.status_legacy.1, &composed_configs.status_legacy.0, "0", "0"];
+      segments.join("\u{0000}")
+    }
+    false => {
+      // for Beta1.8-1.3: seperated by § -> NO COLOR CODES!!
+      // - motd   - online players    - max players
+      let segments: [&str; 3] = [&composed_configs.status_legacy.2, "0", "0"];
+      segments.join("§")
+    }
+  };
+
+  let utf16_bytes: Vec<u16> = characters.encode_utf16().collect();
+  println!("UTF-16BE bytes: {:?}", utf16_bytes.iter().map(|b| format!("{:04x}", b)).collect::<Vec<_>>());
+
+  let mut response_packet = Vec::new();
+  // kick packet -> 0xFF
+  response_packet.write_u8(0xFF).await.expect("Could not write prefix byte to buffer");
+  // length of body in characters(not bytes! but shorts:utf16->u16) as short
+  response_packet.write_u16(utf16_bytes.len() as u16).await.expect("Could not write u16 to buffer");
+  for utf16_byte in utf16_bytes {
+    response_packet.write_u16(utf16_byte).await.expect("Could not write u16 to buffer");
+  }
+  println!("{:?}", response_packet.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>());
+
+  send_flush_close(&*response_packet, &mut stream).await.expect("TODO: panic message");
 }
 
 fn supports_custom_colors(protocol_version: i32) -> bool {
   // protocol version for snapshots after 1.16.4-pre1 are prefixed with 0x40000000, we dont care here
   // 735 -> 1.16: https://wiki.vg/Protocol_version_numbers
   protocol_version >= 735
+}
+
+async fn send_flush_close(data: &[u8], stream: &mut TcpStream) -> Result<(), PacketHandleError> {
+  stream.write_all(&*data).await?;
+  stream.flush().await?;
+  stream.shutdown().await?;
+  Ok(())
 }
 
 fn create_packet(packet_id: i32, content: String) -> Result<Vec<u8>, PacketHandleError> {
