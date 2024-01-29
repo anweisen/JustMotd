@@ -76,27 +76,26 @@ fn encode_favicon(config: &Config) -> Option<String> {
 
 #[derive(Debug, Clone)]
 pub struct ComposedConfigs {
-  motd: String,
-  motd_component: String,
+  status: String,
+  status_component: String,
   disconnect: String,
   disconnect_component: String,
 }
 
 impl ComposedConfigs {
   fn new(favicon: Option<String>, config: &Config) -> Self {
-    let motd = ServerStatus::generate_json(favicon.clone(), &config, false);
-    let motd_component = match config.motd.component {
-      Value::Null => motd.clone(),
+    let status = ServerStatus::generate_json(favicon.clone(), &config, false);
+    let status_component = match config.motd.component {
+      Value::Null => status.clone(),
       _ => ServerStatus::generate_json(favicon.clone(), &config, true),
     };
 
     let disconnect = DisconnectMessage::generate_json(&config, false);
-    let disconnect_component = if config.disconnect.component == Value::Null {
-      disconnect.clone()
-    } else {
-      DisconnectMessage::generate_json(&config, true)
+    let disconnect_component = match config.disconnect.component {
+      Value::Null => disconnect.clone(),
+      _ => DisconnectMessage::generate_json(&config, true),
     };
 
-    Self { motd, motd_component, disconnect, disconnect_component }
+    Self { status, status_component, disconnect, disconnect_component }
   }
 }

@@ -47,12 +47,13 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
     }
   };
 
-  trace!("Decoded: packet_id {:#x}, protocol_version {}, hostname {}, port {}, next_state {:?}", handshake_data.0, handshake_data.1, handshake_data.2, handshake_data.3, handshake_data.4);
+  trace!("Decoded: packet_id {:#x}, protocol_version {}, hostname {}, port {}, next_state {:?}",
+    handshake_data.0, handshake_data.1, handshake_data.2, handshake_data.3, handshake_data.4);
 
   let packet_data = match handshake_data.4 {
     HandshakeNextState::Status => match handshake_data.1 {
-      version if supports_custom_colors(version) => composed_configs.motd_component,
-      _ => composed_configs.motd,
+      version if supports_custom_colors(version) => composed_configs.status_component,
+      _ => composed_configs.status,
     }
     HandshakeNextState::Login => match handshake_data.1 {
       version if supports_custom_colors(version) => composed_configs.disconnect_component,
