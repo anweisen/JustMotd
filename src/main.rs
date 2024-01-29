@@ -44,19 +44,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn load_config(config_path: &str) -> Config {
-  match Config::load(config_path) {
-    Ok(config) => config,
-    Err(err) => match err {
-      ConfigError::Io(_) => {
-        // could not read config file: might not exist -> generate default config
-        warn!("There was no config at '{}', created default config", config_path);
-        let default_config = Config::default();
-        default_config.save(config_path).expect("could not save default config");
-        default_config
-      }
-      ConfigError::Parse(err) => panic!("malformed config, might have changed, delete to regenerate {}", err)
+  Config::load(config_path).unwrap_or_else(|err| match err {
+    ConfigError::Io(_) => {
+      // could not read config file: might not exist -> generate default config
+      warn!("There was no config at '{}', created default config", config_path);
+      let default_config = Config::default();
+      default_config.save(config_path).expect("could not save default config");
+      default_config
     }
-  }
+    ConfigError::Parse(err) => panic!("malformed config, might have changed, delete to regenerate {}", err)
+  })
 }
 
 fn encode_favicon(config: &Config) -> Option<String> {
