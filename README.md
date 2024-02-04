@@ -1,6 +1,7 @@
 # JustMotd
 
-A configurable socket server written in rust responding to packets via the minecraft protocol, providing a motd and disconnect information - for discontinued server projects
+A configurable socket server written in rust responding to packets via the minecraft protocol, 
+providing a motd and disconnect information - for discontinued server projects or maintenance
 
 ## Setup
 
@@ -60,6 +61,9 @@ docker run -d -p 25565:25565 -v /your/path/to/conf:/app/conf -e CONFIG=conf/conf
   "motd": {
     // the motd text for pre1.16 clients, line separation with \n, colors with §
     "text": "pre 1.16 text",
+	
+    // the motd text for legacy clients (1.6 and older), only one short line, no colors in 1.3 and older
+    "legacy": "pre 1.16 text",
 	
     // 1.16 & older support custom rgb colors, fallback to "text" above if not set
     "component": {
