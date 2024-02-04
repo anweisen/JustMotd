@@ -102,13 +102,14 @@ impl ComposedConfigs {
     Self { status, status_component, status_legacy, disconnect, disconnect_component }
   }
 
+  // ensures no § is present
   fn strip_color_codes(text: &String) -> String {
     let mut result = String::new();
     let mut skip = false;
 
     for c in text.chars() {
       if skip || c == '§' {
-        skip = !skip;
+        skip = c == '§';
         continue;
       }
       result.push(c);
