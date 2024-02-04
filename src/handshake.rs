@@ -89,7 +89,7 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
 
   // send response packet to stream & close stream
   match send_flush_close(&packet, &mut stream).await {
-    Ok(_) => trace!("Response to {:?} sent successfully", handshake_data.4),
+    Ok(_) => trace!("Response to {:?} sent successfully", handshake_data.next_state),
     Err(err) => error!("Could not send response: {:?}", err)
   }
 
