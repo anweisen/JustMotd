@@ -60,14 +60,15 @@ pub async fn handle_client(mut stream: TcpStream, composed_configs: ComposedConf
   };
 
   trace!("Decoded: packet_id {:#x}, protocol_version {}, hostname {}, port {}, next_state {:?}",
-    handshake_data.0, handshake_data.1, handshake_data.2, handshake_data.3, handshake_data.4);
+    handshake_data.packet_id, handshake_data.protocol_version,
+    handshake_data.hostname,handshake_data.port, handshake_data.next_state);
 
-  let packet_data = match handshake_data.4 {
-    HandshakeNextState::Status => match handshake_data.1 {
+  let packet_data = match handshake_data.next_state {
+    HandshakeNextState::Status => match handshake_data.protocol_version {
       version if supports_custom_colors(version) => composed_configs.status_component,
       _ => composed_configs.status,
     }
-    HandshakeNextState::Login => match handshake_data.1 {
+    HandshakeNextState::Login => match handshake_data.protocol_version {
       version if supports_custom_colors(version) => composed_configs.disconnect_component,
       _ => composed_configs.disconnect,
     }
@@ -120,15 +121,15 @@ async fn handle_legacy(n: usize, peek_bytes: &[u8], composed_configs: &ComposedC
     }
   };
 
-  let utf16_bytes: Vec<u16> = characters.encode_utf16().collect();
+  let utf16_encoded: Vec<u16> = characters.encode_utf16().collect();
 
   let mut response_packet = Vec::new();
-  // kick packet -> 0xFF
+  // "kick packet" -> 0xFF
   response_packet.write_u8(0xFF).await.expect("Could not write prefix byte to buffer");
   // length of body in characters(not bytes! but shorts:utf16->u16) as short
-  response_packet.write_u16(utf16_bytes.len() as u16).await.expect("Could not write u16 to buffer");
-  for utf16_byte in utf16_bytes {
-    response_packet.write_u16(utf16_byte).await.expect("Could not write u16 to buffer");
+  response_packet.write_u16(utf16_encoded.len() as u16).await.expect("Could not write u16 to buffer");
+  for bin in utf16_encoded {
+    response_packet.write_u16(bin).await.expect("Could not write u16 to buffer");
   }
 
   send_flush_close(&*response_packet, &mut stream).await.expect("TODO: panic message");
@@ -165,19 +166,31 @@ fn decode_handshake(mut bytes: &[u8]) -> Result<HandshakeData, PacketHandleError
   let protocol_version = VarInt::decode(&mut bytes)?;
   let hostname = VarString::decode(&mut bytes)?;
   let port = bytes.get_u16(); // u16: short
-  let next_state = VarInt::decode(&mut bytes)?;
+  let next_state = HandshakeNextState::from(VarInt::decode(&mut bytes)?);
 
-  Ok(HandshakeData(packet_id, protocol_version, hostname, port, unsafe { std::mem::transmute(next_state) }))
+  Ok(HandshakeData { packet_id, protocol_version, hostname, port, next_state })
 }
 
 #[derive(Debug)]
-struct HandshakeData(i32, i32, String, u16, HandshakeNextState);
+struct HandshakeData {
+  pub packet_id: i32,
+  pub protocol_version: i32,
+  pub hostname: String,
+  pub port: u16,
+  pub next_state: HandshakeNextState,
+}
 
 #[repr(i32)]
 #[derive(Debug, PartialEq)]
 enum HandshakeNextState {
   Status = 1,
   Login = 2,
+}
+
+impl From<i32> for HandshakeNextState {
+  fn from(value: i32) -> Self {
+    unsafe { std::mem::transmute(value) }
+  }
 }
 
 #[derive(Debug)]
