@@ -11,7 +11,7 @@ COPY src/ src/
 RUN cargo build --release
 
 # Stage 2: Execute the binary on a minimal Linux server image
-FROM debian:latest
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
