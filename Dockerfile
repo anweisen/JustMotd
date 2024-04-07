@@ -16,9 +16,9 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 # Copy the compiled binary from the builder stage to the final stage
-COPY --from=build /app/target/release/JustMotd .
+COPY --from=build /app/target/release/justmotd .
 
 EXPOSE 25565
 
 # Define the command to run when the container starts
-CMD ["./JustMotd"]
+CMD ["./justmotd"]
